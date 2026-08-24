@@ -21,7 +21,6 @@ public class Shooter extends SubsystemBase {
     private final PIDController flywheelPid = new PIDController(0.001, 0, 0); 
     private final SimpleMotorFeedforward flywheelFeedforward = new SimpleMotorFeedforward(0.1, 0.12);
     private double targetRPM = 0.0;
-    private boolean flywheelsRunning = false;
     
     // Hood Control
     private final ProfiledPIDController hoodPid = new ProfiledPIDController(
@@ -29,7 +28,13 @@ public class Shooter extends SubsystemBase {
         new TrapezoidProfile.Constraints(90.0, 90.0)
     );
     private double targetAngleDegrees = 0.0;
-    private boolean hoodRunning = false;
+
+    public enum ShooterState {
+        IDLE,      // Mechanisms are stopped and resting
+        SHOOTING   // Mechanisms are actively adjusting to target RPM and Hood angle
+    }
+    
+    private ShooterState state = ShooterState.IDLE;
 
     public Shooter(ShooterIO io) {
         this.io = io;
@@ -40,24 +45,28 @@ public class Shooter extends SubsystemBase {
         io.updateInputs(inputs);
         Logger.processInputs("Shooter", inputs);
 
-        // Flywheel Logic
-        if (flywheelsRunning) {
-            double ffVolts = flywheelFeedforward.calculate(targetRPM);
-            double pidVolts = flywheelPid.calculate(inputs.leftFlywheelVelocityRPM, targetRPM);
-            io.setFlywheelVoltage(ffVolts + pidVolts);
-        } else {
-            io.setFlywheelVoltage(0.0);
+        // Execute logic based on the State Enum
+        switch (state) {
+            case SHOOTING:
+                // Flywheel Logic
+                double ffVolts = flywheelFeedforward.calculate(targetRPM);
+                double fPidVolts = flywheelPid.calculate(inputs.leftFlywheelVelocityRPM, targetRPM);
+                io.setFlywheelVoltage(ffVolts + fPidVolts);
+                
+                // Hood Logic
+                double hPidVolts = hoodPid.calculate(inputs.hoodAngleDegrees, targetAngleDegrees);
+                io.setHoodVoltage(hPidVolts);
+                break;
+                
+            case IDLE:
+            default:
+                io.setFlywheelVoltage(0.0);
+                io.setHoodVoltage(0.0);
+                break;
         }
 
-        // Hood Logic
-        if (hoodRunning) {
-            double pidVolts = hoodPid.calculate(inputs.hoodAngleDegrees, targetAngleDegrees);
-            io.setHoodVoltage(pidVolts);
-        } else {
-            io.setHoodVoltage(0.0);
-        }
-
-        // Log our targets
+        // Log our targets and current Enum state string
+        Logger.recordOutput("Shooter/CurrentState", state.toString());
         Logger.recordOutput("Shooter/TargetRPM", targetRPM);
         Logger.recordOutput("Shooter/TargetAngleDeg", targetAngleDegrees);
     }
@@ -99,20 +108,19 @@ public class Shooter extends SubsystemBase {
     /** Set the desired flywheel speed */
     public void setTargetRPM(double rpm) {
         this.targetRPM = rpm;
-        this.flywheelsRunning = true;
+        this.state = ShooterState.SHOOTING;
     }
     
     /** Set the desired hood angle from 8.0 to 40.0 degrees */
     public void setTargetAngle(double degrees) {
         // Constrain to physical hard stops so the gear doesn't break
         this.targetAngleDegrees = edu.wpi.first.math.MathUtil.clamp(degrees, 8.0, 40.0);
-        this.hoodRunning = true;
+        this.state = ShooterState.SHOOTING;
     }
 
-    /** Stop all mechanisms */
+    /** Stop all mechanisms by switching the state to IDLE */
     public void stop() {
-        this.flywheelsRunning = false;
-        this.hoodRunning = false;
+        this.state = ShooterState.IDLE;
         this.targetRPM = 0;
         io.stop();
     }
