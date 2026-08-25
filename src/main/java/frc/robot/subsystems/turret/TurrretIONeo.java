@@ -12,7 +12,7 @@ import com.revrobotics.spark.AbsoluteEncoder;
 
 
 
-public class TurrretIONeo extends TurretIO {
+public class TurrretIONeo implements TurretIO {
     private final SparkMax turret;
     private final AbsoluteEncoder absoluteEncoder;
     private final SparkClosedLoopController turretController;

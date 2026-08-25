@@ -26,7 +26,7 @@ public class TurretSubsystem extends SubsystemBase {
     }
 
     public void startTurning(){
-        state = TurretState.MOVING;
+        state = TurretState.TURNING;
     }
 
     public void stopTurning(){
@@ -45,7 +45,7 @@ public class TurretSubsystem extends SubsystemBase {
                 return Commands.parallel(
                     Commands.runOnce(()->{
                         io.startTurning();
-                    })
+                    }),
                     Commands.runOnce(()->{
                         io.turnDegrees(degrees);
                     })

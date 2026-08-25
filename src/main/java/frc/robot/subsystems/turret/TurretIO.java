@@ -1,5 +1,7 @@
+package frc.robot.subsystems.turret;
+
 public interface TurretIO {
     void turnDegrees(double degrees);
-    void getCurrentAngle();
+    double getCurrentAngle();
     void moveToCenter();
 }
