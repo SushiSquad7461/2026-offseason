@@ -1,28 +1,28 @@
 package frc.robot.subsystems.shooter;
 
-import com.revrobotics.CANSparkMax;
+import com.revrobotics.spark.SparkMax;
 import com.revrobotics.RelativeEncoder;
-import com.revrobotics.CANSparkMaxLowLevel.MotorType;
+import com.revrobotics.spark.SparkLowLevel.MotorType;
 
 /**
  * Physical hardware implementation of the combined Shooter and Hood using NEO motors.
  */
 public class ShooterIOSparkMax implements ShooterIO {
     // Flywheel Hardware (The left/right motors power both the main flywheels AND backspin wheels)
-    private final CANSparkMax leftMotor;
-    private final CANSparkMax rightMotor;
+    private final SparkMax leftMotor;
+    private final SparkMax rightMotor;
     private final RelativeEncoder leftEncoder;
     private final RelativeEncoder rightEncoder;
 
     // Hood Hardware
-    private final CANSparkMax hoodMotor;
+    private final SparkMax hoodMotor;
     private final RelativeEncoder hoodEncoder;
     private static final double HOOD_ROTATIONS_TO_DEGREES = 360.0 / 10.0; // Example 10:1 gear ratio
 
     public ShooterIOSparkMax() {
         // Initialize Flywheel motors (IDs 10, 11)
-        leftMotor = new CANSparkMax(10, MotorType.kBrushless);
-        rightMotor = new CANSparkMax(11, MotorType.kBrushless);
+        leftMotor = new SparkMax(10, MotorType.kBrushless);
+        rightMotor = new SparkMax(11, MotorType.kBrushless);
         leftMotor.restoreFactoryDefaults();
         rightMotor.restoreFactoryDefaults();
         leftMotor.setInverted(false);
@@ -32,7 +32,7 @@ public class ShooterIOSparkMax implements ShooterIO {
         rightEncoder = rightMotor.getEncoder();
 
         // Initialize Hood motor (ID 12)
-        hoodMotor = new CANSparkMax(12, MotorType.kBrushless);
+        hoodMotor = new SparkMax(12, MotorType.kBrushless);
         hoodMotor.restoreFactoryDefaults();
         hoodMotor.setInverted(false);
         
