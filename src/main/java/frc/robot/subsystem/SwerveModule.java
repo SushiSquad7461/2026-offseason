@@ -25,7 +25,7 @@ import frc.lib.math.Conversions;
 import frc.lib.util.SwerveModuleConstants;
 import frc.robot.Robot;
 import frc.robot.generated.Constants;
-
+SparkMax spark = new SparkMax(1, MotorType.kBrushless);
 public class SwerveModule {
     public final int moduleNumber;
     private final Rotation2d angleOffset;
