@@ -1,189 +1,292 @@
 package frc.robot.subsystems;
 
-import com.ctre.phoenix6.BaseStatusSignal;
-import com.ctre.phoenix6.StatusSignal;
-import com.ctre.phoenix6.configs.Slot0Configs;
-import com.ctre.phoenix6.controls.DutyCycleOut;
-import com.ctre.phoenix6.controls.PositionVoltage;
-import com.ctre.phoenix6.controls.VelocityVoltage;
-import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.CANcoder;
-import com.ctre.phoenix6.hardware.SparkMax;
-import com.ctre.phoenix6.sim.SparkMaxSimState;
+import com.revrobotics.spark.SparkBase.MotorType;
+import com.revrobotics.spark.SparkMax;
+import com.revrobotics.spark.SparkMaxSimState;
+import com.revrobotics.RelativeEncoder;
 
+import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.units.measure.Angle;
-import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.simulation.DCMotorSim;
+
 import frc.lib.math.Conversions;
 import frc.lib.util.SwerveModuleConstants;
-import frc.robot.Robot;
 import frc.robot.generated.Constants;
-SparkMax spark = new SparkMax(1, MotorType.kBrushless);
+
+
+
 public class SwerveModule {
+
     public final int moduleNumber;
+    SparkMax spark = new SparkMax(1, MotorType.kBrushless);
+    
+
     private final Rotation2d angleOffset;
 
-    private final CANSparkMax angleMotor;
-    private final StatusSignal<Angle> anglePosition;
-    private final CANSparkMax driveMotor;
-    private final StatusSignal<Angle> drivePosition;
-    private final StatusSignal<AngularVelocity> driveVelocity;
-    private final CANcoder angleEncoder;
-    private final StatusSignal<Angle> angleEncoderPosition;
+    // NEO motors
+    private final SparkMax angleMotor;
+    private final SparkMax driveMotor;
 
-    /* drive motor control requests */
-    private final DutyCycleOut driveDutyCycle = new DutyCycleOut(0);
-    private final VelocityVoltage driveVelocityReq = new VelocityVoltage(0);
+    // encoders built into the NEOs
+    private final RelativeEncoder angleEncoder;
+    private final RelativeEncoder driveEncoder;
 
-    /* angle motor control requests */
-    private final PositionVoltage anglePositionReq = new PositionVoltage(0);
+    // cancoder for the absolute angle
+    private final CANcoder canCoder;
 
-    private final DCMotor driveMotorModel = DCMotor.getSparkMax(1);
-    private final DCMotor angleMotorModel = DCMotor.getSparkMax(1);
+    // pid for the motors will change this later
+    private final PIDController anglePID = new PIDController(0.5, 0.0, 0.0);
+    private final PIDController drivePID = new PIDController(0.1, 0.0, 0.0);
+
+    // simulation 
+    private final DCMotor driveMotorModel = DCMotor.getNEO(1);
+    private final DCMotor angleMotorModel = DCMotor.getNEO(1);
+
     private final DCMotorSim driveSim = new DCMotorSim(
         LinearSystemId.createDCMotorSystem(
-            driveMotorModel, 
+            driveMotorModel,
             0.025,
-            Constants.Swerve.driveGearRatio),
-        driveMotorModel);
+            Constants.Swerve.driveGearRatio
+        ),
+        driveMotorModel
+    );
+
     private final DCMotorSim angleSim = new DCMotorSim(
         LinearSystemId.createDCMotorSystem(
-            angleMotorModel, 
-            0.004, 
-            Constants.Swerve.angleGearRatio), 
-        angleMotorModel);
-        
-    private TalonFXSimState driveMotorSim;
-    private TalonFXSimState angleMotorSim;
+            angleMotorModel,
+            0.004,
+            Constants.Swerve.angleGearRatio
+        ),
+        angleMotorModel
+    );
 
-    public SwerveModule(int moduleNumber, SwerveModuleConstants moduleConstants){
+    private final SparkMaxSimState driveMotorSim;
+    private final SparkMaxSimState angleMotorSim;
+
+
+    public SwerveModule(int moduleNumber, SwerveModuleConstants moduleConstants) {
+
         this.moduleNumber = moduleNumber;
         this.angleOffset = moduleConstants.angleOffset;
-        
-        /* Angle Encoder Config */
-        angleEncoder = new CANcoder(moduleConstants.cancoderID);
-        angleEncoder.getConfigurator().apply(Robot.ctreConfigs.swerveCANcoderConfig);
 
-        /* Angle Motor Config */
-        angleMotor = new SparkMax(moduleConstants.angleMotorID);
-        /* Drive Motor Config */
-        driveMotor = new SparkMax(moduleConstants.driveMotorID);
+        // set up the CANcoder
+        canCoder = new CANcoder(moduleConstants.cancoderID);
 
-        Robot.ctreConfigs.swerveDriveFXConfig.Slot0 = Slot0Configs.from(moduleConstants.driveGains);
-        Robot.ctreConfigs.swerveAngleFXConfig.Slot0 = Slot0Configs.from(moduleConstants.angleGains);
-        
-        angleMotor.getConfigurator().apply(Robot.ctreConfigs.swerveAngleFXConfig);
-        driveMotor.getConfigurator().apply(Robot.ctreConfigs.swerveDriveFXConfig);
-        driveMotor.getConfigurator().setPosition(0.0);
+        // set up the NEOs
+        angleMotor = new SparkMax(moduleConstants.angleMotorID, MotorType.kBrushless);
+        driveMotor = new SparkMax(moduleConstants.driveMotorID, MotorType.kBrushless);
 
-        drivePosition = driveMotor.getPosition();
-        driveVelocity = driveMotor.getVelocity();
-        anglePosition = angleMotor.getPosition();
-        angleEncoderPosition = angleEncoder.getAbsolutePosition();
+        // get the encoders from the NEOs
+        angleEncoder = angleMotor.getEncoder();
+        driveEncoder = driveMotor.getEncoder();
 
-        if (Constants.IS_SIM) {
-            driveMotorSim = driveMotor.getSimState();
-            angleMotorSim = angleMotor.getSimState();
-            angleEncoder.getSimState().setRawPosition(angleOffset.getRotations());    
-        }
+        // reset the drive encoder when we start
+        driveEncoder.setPosition(0.0);
 
+        // get sim states
+        driveMotorSim = driveMotor.getSimState();
+        angleMotorSim = angleMotor.getSimState();
+
+        // reset the angle to the absolute CANcoder position
         resetToAbsolute();
     }
 
-    //made helper methods for sysid since module drive and angle motors aren't visible
+
+    // made helper methods for sysid so the motors can be controlled directly
     public void setDriveVoltage(double volts) {
-        driveMotor.setControl(new VoltageOut(volts));
+        driveMotor.setVoltage(volts);
     }
 
     public void setSteerVoltage(double volts) {
-        angleMotor.setControl(new VoltageOut(volts));
+        angleMotor.setVoltage(volts);
     }
 
-    public void setDesiredState(SwerveModuleState desiredState, boolean isOpenLoop){
+
+    public void setDesiredState(SwerveModuleState desiredState, boolean isOpenLoop) {
+
+        // optimize the wheel angle so it doesn't turn way more than it needs to
         desiredState.optimize(getState().angle);
-        angleMotor.setControl(anglePositionReq.withPosition(desiredState.angle.getRotations()));
+
+        // set the angle
+        double currentAngle = angleEncoder.getPosition();
+        double targetAngle = desiredState.angle.getRotations();
+
+        double angleOutput = anglePID.calculate(
+            currentAngle,
+            targetAngle
+        );
+
+        angleMotor.setVoltage(angleOutput);
+
+        // set the speed
         setSpeed(desiredState, isOpenLoop);
     }
 
-    private void setSpeed(SwerveModuleState desiredState, boolean isOpenLoop){
-        if(isOpenLoop){
-            driveDutyCycle.Output = desiredState.speedMetersPerSecond / Constants.Swerve.maxSpeed;
-            driveMotor.setControl(driveDutyCycle);
+
+    private void setSpeed(SwerveModuleState desiredState, boolean isOpenLoop) {
+
+        if (isOpenLoop) {
+
+            // open loop = just give the motor a percentage
+            double percentOutput =
+                desiredState.speedMetersPerSecond / Constants.Swerve.maxSpeed;
+
+            driveMotor.set(percentOutput);
+
+        } else {
+
+            // closed loop = use pid to control the speed
+            double targetRPS = Conversions.MPSToRPS(
+                desiredState.speedMetersPerSecond,
+                Constants.Swerve.wheelCircumference
+            );
+
+            double currentRPS = driveEncoder.getVelocity() / 60.0;
+
+            double driveOutput = drivePID.calculate(
+                currentRPS,
+                targetRPS
+            );
+
+            driveMotor.setVoltage(driveOutput);
         }
-        else {
-            driveVelocityReq.Velocity = Conversions.MPSToRPS(desiredState.speedMetersPerSecond, Constants.Swerve.wheelCircumference);
-            driveMotor.setControl(driveVelocityReq);
-        }
     }
 
-    public Rotation2d getCANcoder(){
-        return Rotation2d.fromRotations(angleEncoderPosition.getValueAsDouble());
+
+    public Rotation2d getCANcoder() {
+        return Rotation2d.fromRotations(
+            canCoder.getAbsolutePosition().getValueAsDouble()
+        );
     }
 
-    public void resetToAbsolute(){
-        double absolutePosition = getCANcoder().getRotations() - angleOffset.getRotations();
-        var res = angleMotor.setPosition(absolutePosition);
-        System.out.println(String.format("Module%d.resetToAbsolute: %s", moduleNumber, res.getName()));
+
+    public void resetToAbsolute() {
+
+        double absolutePosition =
+            getCANcoder().getRotations()
+            - angleOffset.getRotations();
+
+        angleEncoder.setPosition(absolutePosition);
+
+        System.out.println(
+            "Module " + moduleNumber +
+            " reset to absolute: " +
+            absolutePosition
+        );
     }
 
-    public Rotation2d getCANcoderWithOffset(){
-        return Rotation2d.fromRotations(getCANcoder1().getRotations() - angleOffset.getRotations());
-    }
-    /** Use this to obtain the drive position status signal of this module to be refreshed along with the signal from getAnglePosition every loop before using getState or getPosition */
-    public BaseStatusSignal getDrivePosition() {
-        return drivePosition;
+
+    public Rotation2d getCANcoderWithOffset() {
+
+        return Rotation2d.fromRotations(
+            getCANcoder().getRotations()
+            - angleOffset.getRotations()
+        );
     }
 
-    // Use this to obtain the drive velocity status signal of this module to be refreshed every loop before using getState
-    public BaseStatusSignal getDriveVelocity() {
-        return driveVelocity;
+
+    public double getDrivePosition() {
+        return driveEncoder.getPosition();
     }
 
-    /** Use this to obtain the angle position status signal of this module to be refreshed along with the signal from getDrivePosition every loop before using getState or getPosition */
-    public BaseStatusSignal getAnglePosition() {
-        return anglePosition;
+
+    public double getDriveVelocity() {
+        return driveEncoder.getVelocity();
     }
 
-    /** Use this to obtain the encoder position status signal of this module to be refreshed every loop before using getCANcoder */
-    public BaseStatusSignal getEncoderPosition() {
-        return angleEncoderPosition;
+
+    public double getAnglePosition() {
+        return angleEncoder.getPosition();
     }
 
-    public SwerveModuleState getState(){
+
+    public SwerveModuleState getState() {
+
         return new SwerveModuleState(
-            Conversions.RPSToMPS(driveVelocity.getValueAsDouble(), Constants.Swerve.wheelCircumference), 
-            Rotation2d.fromRotations(anglePosition.getValueAsDouble())
+            Conversions.RPSToMPS(
+                driveEncoder.getVelocity() / 60.0,
+                Constants.Swerve.wheelCircumference
+            ),
+
+            Rotation2d.fromRotations(
+                angleEncoder.getPosition()
+            )
         );
     }
 
-    public SwerveModulePosition getPosition(){
+
+    public SwerveModulePosition getPosition() {
+
         return new SwerveModulePosition(
-            Conversions.rotationsToMeters(drivePosition.getValueAsDouble(), Constants.Swerve.wheelCircumference), 
-            Rotation2d.fromRotations(anglePosition.getValueAsDouble())
+            Conversions.rotationsToMeters(
+                driveEncoder.getPosition(),
+                Constants.Swerve.wheelCircumference
+            ),
+
+            Rotation2d.fromRotations(
+                angleEncoder.getPosition()
+            )
         );
     }
 
-    /** @return simulated current draw of the module in amps */
+
+    // simulation stuff so we can test without the actual robot
     public double simulationPeriodic() {
-        var supplyVoltage = RobotController.getBatteryVoltage();
+
+        double supplyVoltage = RobotController.getBatteryVoltage();
+
         driveMotorSim.setSupplyVoltage(supplyVoltage);
         angleMotorSim.setSupplyVoltage(supplyVoltage);
-        driveSim.setInputVoltage(driveMotorSim.getMotorVoltage());
-        angleSim.setInputVoltage(angleMotorSim.getMotorVoltage());
 
-        
-        driveMotorSim.setRawRotorPosition(driveSim.getAngularPositionRotations() * Constants.Swerve.driveGearRatio);
-        driveMotorSim.setRotorVelocity(Units.radiansToRotations(driveSim.getAngularVelocityRadPerSec() * Constants.Swerve.driveGearRatio));
-        angleMotorSim.setRawRotorPosition(angleSim.getAngularPositionRotations() * Constants.Swerve.angleGearRatio);
-        angleMotorSim.setRotorVelocity(Units.radiansToRotations(angleSim.getAngularVelocityRadPerSec()) * Constants.Swerve.angleGearRatio);
+        driveSim.setInputVoltage(
+            driveMotorSim.getAppliedOutput()
+            * supplyVoltage
+        );
 
-        return Math.abs(driveSim.getCurrentDrawAmps()) + Math.abs(angleSim.getCurrentDrawAmps());
+        angleSim.setInputVoltage(
+            angleMotorSim.getAppliedOutput()
+            * supplyVoltage
+        );
+
+        // update the simulated drive motor
+        driveSim.update(0.02);
+
+        // update the simulated angle motor
+        angleSim.update(0.02);
+
+        // put the simulated values back into the NEOs
+        driveMotorSim.setRawRotorPosition(
+            driveSim.getAngularPositionRotations()
+            * Constants.Swerve.driveGearRatio
+        );
+
+        driveMotorSim.setRotorVelocity(
+            Units.radiansToRotations(
+                driveSim.getAngularVelocityRadPerSec()
+                * Constants.Swerve.driveGearRatio
+            )
+        );
+
+        angleMotorSim.setRawRotorPosition(
+            angleSim.getAngularPositionRotations()
+            * Constants.Swerve.angleGearRatio
+        );
+
+        angleMotorSim.setRotorVelocity(
+            Units.radiansToRotations(
+                angleSim.getAngularVelocityRadPerSec()
+            )
+            * Constants.Swerve.angleGearRatio
+        );
+
+        return Math.abs(driveSim.getCurrentDrawAmps())
+            + Math.abs(angleSim.getCurrentDrawAmps());
     }
 }
