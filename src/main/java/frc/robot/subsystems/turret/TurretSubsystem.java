@@ -1,12 +1,9 @@
 package frc.robot.subsystems.turret;
 
-import org.littletonrobotics.junction.mechanism.LoggedMechanism2d;
-import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.generated.Constants;
 public class TurretSubsystem extends SubsystemBase {
     private final TurretIO io;
 
@@ -18,43 +15,23 @@ public class TurretSubsystem extends SubsystemBase {
 
     private TurretState state = TurretState.IDLE;
 
-    public LoggedMechanism2d mech2d = new LoggedMechanism2d(?,?);
-
-
     public TurretSubsystem(TurretIO io) {
         this.io = io;
-    }
-
-    public void startTurning(){
-        state = TurretState.TURNING;
-    }
-
-    public void stopTurning(){
-        state = TurretState.IDLE;
     }
 
     public Command changeState(TurretState newState){
         this.state = newState;
         switch (newState) {
             case IDLE:
-                return Commands.parallel(
-                    Commands.runOnce(()->{
-                        io.moveToCenter();
-                    }));
+                Commands.runOnce(()->{
+                    io.moveToCenter();
+                });
             case TURNING:
-                return Commands.parallel(
-                    Commands.runOnce(()->{
-                        io.startTurning();
-                    }),
-                    Commands.runOnce(()->{
-                        io.turnDegrees(degrees);
-                    })
-                );
+                return Commands.none();
             case LOCKED:
-                return Commands.parallel(
-                    Commands.runOnce(()->{
-                        stopTurning();
-                    }));
+                return Commands.runOnce(() -> {
+                    io.stop();
+                });
             default:
                 return Commands.none();
         }
