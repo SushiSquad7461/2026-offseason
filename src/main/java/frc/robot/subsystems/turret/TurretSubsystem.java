@@ -7,6 +7,12 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 public class TurretSubsystem extends SubsystemBase {
     private final TurretIO io;
 
+    /*
+     * IDLE - Turret not in use
+     * TURNING - Turret is turning into position
+     * LOCKED - lock the turret at one position
+    */
+
     public enum TurretState {
         IDLE,
         TURNING,
@@ -19,6 +25,11 @@ public class TurretSubsystem extends SubsystemBase {
         this.io = io;
     }
 
+    /*
+     * IDLE - returns the turret to face forward
+     * TURNING - does nothing
+     * LOCKED - stops the turret from moving
+     */ 
     public Command changeState(TurretState newState){
         this.state = newState;
         switch (newState) {
