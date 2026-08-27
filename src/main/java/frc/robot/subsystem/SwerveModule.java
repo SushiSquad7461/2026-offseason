@@ -8,8 +8,8 @@ import com.ctre.phoenix6.controls.PositionVoltage;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.CANcoder;
-import com.ctre.phoenix6.hardware.TalonFX;
-import com.ctre.phoenix6.sim.TalonFXSimState;
+import com.ctre.phoenix6.hardware.SparkMax;
+import com.ctre.phoenix6.sim.SparkMaxSimState;
 
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
@@ -30,9 +30,9 @@ public class SwerveModule {
     public final int moduleNumber;
     private final Rotation2d angleOffset;
 
-    private final TalonFX angleMotor;
+    private final CANSparkMax angleMotor;
     private final StatusSignal<Angle> anglePosition;
-    private final TalonFX driveMotor;
+    private final CANSparkMax driveMotor;
     private final StatusSignal<Angle> drivePosition;
     private final StatusSignal<AngularVelocity> driveVelocity;
     private final CANcoder angleEncoder;
@@ -72,9 +72,9 @@ public class SwerveModule {
         angleEncoder.getConfigurator().apply(Robot.ctreConfigs.swerveCANcoderConfig);
 
         /* Angle Motor Config */
-        angleMotor = new TalonFX(moduleConstants.angleMotorID);
+        angleMotor = new SparkMax(moduleConstants.angleMotorID);
         /* Drive Motor Config */
-        driveMotor = new TalonFX(moduleConstants.driveMotorID);
+        driveMotor = new SparkMax(moduleConstants.driveMotorID);
 
         Robot.ctreConfigs.swerveDriveFXConfig.Slot0 = Slot0Configs.from(moduleConstants.driveGains);
         Robot.ctreConfigs.swerveAngleFXConfig.Slot0 = Slot0Configs.from(moduleConstants.angleGains);
