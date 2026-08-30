@@ -1,9 +1,6 @@
 package frc.robot.subsystems.shooter;
 
-import edu.wpi.first.math.controller.PIDController;
-import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
-import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import org.littletonrobotics.junction.Logger;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -17,16 +14,10 @@ public class Shooter extends SubsystemBase {
     private final ShooterIO io;
     private final ShooterIOInputsAutoLogged inputs = new ShooterIOInputsAutoLogged();
 
-    // Flywheel Control
-    private final PIDController flywheelPid = new PIDController(0.001, 0, 0); 
+    // We no longer calculate PID on the RoboRIO! It has been moved to the physical SparkMax hardware.
+    // However, we STILL calculate Feedforward on the RIO because WPILib's feedforward physics class is superior.
     private final SimpleMotorFeedforward flywheelFeedforward = new SimpleMotorFeedforward(0.1, 0.12);
     private double targetRPM = 0.0;
-    
-    // Hood Control
-    private final ProfiledPIDController hoodPid = new ProfiledPIDController(
-        0.05, 0.0, 0.0, 
-        new TrapezoidProfile.Constraints(90.0, 90.0)
-    );
     private double targetAngleDegrees = 0.0;
 
     public enum ShooterState {
@@ -48,20 +39,17 @@ public class Shooter extends SubsystemBase {
         // Execute logic based on the State Enum
         switch (state) {
             case SHOOTING:
-                // Flywheel Logic
+                // Only Feedforward is calculated here. PID is happening at 1000hz on the SparkMax!
                 double ffVolts = flywheelFeedforward.calculate(targetRPM);
-                double fPidVolts = flywheelPid.calculate(inputs.leftFlywheelVelocityRPM, targetRPM);
-                io.setFlywheelVoltage(ffVolts + fPidVolts);
                 
-                // Hood Logic
-                double hPidVolts = hoodPid.calculate(inputs.hoodAngleDegrees, targetAngleDegrees);
-                io.setHoodVoltage(hPidVolts);
+                // Blast the target points straight to the hardware
+                io.setFlywheelVelocityRPM(targetRPM, ffVolts);
+                io.setHoodPositionDegrees(targetAngleDegrees);
                 break;
                 
             case IDLE:
             default:
-                io.setFlywheelVoltage(0.0);
-                io.setHoodVoltage(0.0);
+                io.stop();
                 break;
         }
 

@@ -26,11 +26,18 @@ public interface ShooterIO {
     /** Updates the set of loggable inputs. */
     public default void updateInputs(ShooterIOInputs inputs) {}
 
-    /** Sets the voltage applied to the flywheels. */
-    public default void setFlywheelVoltage(double volts) {}
+    /** 
+     * Sets the target velocity for the flywheels (handled by onboard SparkMax PID).
+     * @param rpm Target RPM
+     * @param feedforwardVolts The calculated baseline baseline voltage to assist the PID
+     */
+    public default void setFlywheelVelocityRPM(double rpm, double feedforwardVolts) {}
 
-    /** Sets the voltage applied to the hood motor. */
-    public default void setHoodVoltage(double volts) {}
+    /** 
+     * Sets the target angle for the hood (handled by onboard SparkMax PID).
+     * @param degrees Target angle
+     */
+    public default void setHoodPositionDegrees(double degrees) {}
 
     /** Stops all motors in the subsystem. */
     public default void stop() {}

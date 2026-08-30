@@ -3,6 +3,8 @@ package frc.robot.subsystems.shooter;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
+import com.revrobotics.SparkPIDController;
+
 
 /**
  * Physical hardware implementation of the combined Shooter and Hood using NEO motors.
@@ -19,6 +21,11 @@ public class ShooterIOSparkMax implements ShooterIO {
     private final RelativeEncoder hoodEncoder;
     private static final double HOOD_ROTATIONS_TO_DEGREES = 360.0 / 10.0; // Example 10:1 gear ratio
 
+    // Hardware PID Controllers
+    private final SparkPIDController leftPid;
+    private final SparkPIDController rightPid;
+    private final SparkPIDController hoodPid;
+
     public ShooterIOSparkMax() {
         // Initialize Flywheel motors (IDs 10, 11)
         leftMotor = new SparkMax(10, MotorType.kBrushless);
@@ -31,12 +38,23 @@ public class ShooterIOSparkMax implements ShooterIO {
         leftEncoder = leftMotor.getEncoder();
         rightEncoder = rightMotor.getEncoder();
 
+        leftPid = leftMotor.getPIDController();
+        rightPid = rightMotor.getPIDController();
+        
+        // P value for Velocity Control onboard
+        leftPid.setP(0.001);
+        rightPid.setP(0.001);
+
         // Initialize Hood motor (ID 12)
         hoodMotor = new SparkMax(12, MotorType.kBrushless);
         hoodMotor.restoreFactoryDefaults();
         hoodMotor.setInverted(false);
         
         hoodEncoder = hoodMotor.getEncoder();
+        hoodPid = hoodMotor.getPIDController();
+
+        // P value for Position Control onboard
+        hoodPid.setP(0.05);
 
         // Save settings to flash
         leftMotor.burnFlash();
@@ -62,14 +80,17 @@ public class ShooterIOSparkMax implements ShooterIO {
     }
 
     @Override
-    public void setFlywheelVoltage(double volts) {
-        leftMotor.setVoltage(volts);
-        rightMotor.setVoltage(volts);
+    public void setFlywheelVelocityRPM(double rpm, double feedforwardVolts) {
+        // Runs at 1000hz on the SparkMax directly! ArbFF adds the baseline voltage.
+        leftPid.setReference(rpm, SparkMax.ControlType.kVelocity, 0, feedforwardVolts, SparkPIDController.ArbFFUnits.kVoltage);
+        rightPid.setReference(rpm, SparkMax.ControlType.kVelocity, 0, feedforwardVolts, SparkPIDController.ArbFFUnits.kVoltage);
     }
     
     @Override
-    public void setHoodVoltage(double volts) {
-        hoodMotor.setVoltage(volts);
+    public void setHoodPositionDegrees(double degrees) {
+        // Convert degrees back into motor rotations for the SparkMax
+        double rotations = degrees / HOOD_ROTATIONS_TO_DEGREES;
+        hoodPid.setReference(rotations, SparkMax.ControlType.kPosition);
     }
 
     @Override

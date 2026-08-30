@@ -4,6 +4,7 @@ import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.wpilibj.simulation.FlywheelSim;
 import edu.wpi.first.wpilibj.simulation.SingleJointedArmSim;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.math.controller.PIDController;
 
 /**
  * Combined Simulation physics logic for the Shooter and Hood.
@@ -24,6 +25,12 @@ public class ShooterIOSim implements ShooterIO {
         true,                   // Simulate gravity
         Units.degreesToRadians(8)  // Starting angle (resting at min)
     );
+
+    // Because the Simulation doesn't have a real SparkMax doing the math 1000x a second, 
+    // we fake the hardware PID loop right here in the simulation code!
+    private final PIDController simLeftFlywheelPid = new PIDController(0.001, 0, 0);
+    private final PIDController simRightFlywheelPid = new PIDController(0.001, 0, 0);
+    private final PIDController simHoodPid = new PIDController(0.05, 0, 0);
 
     private double leftAppliedVolts = 0.0;
     private double rightAppliedVolts = 0.0;
@@ -52,22 +59,29 @@ public class ShooterIOSim implements ShooterIO {
     }
 
     @Override
-    public void setFlywheelVoltage(double volts) {
-        leftAppliedVolts = volts;
-        rightAppliedVolts = volts;
-        leftFlywheelSim.setInputVoltage(volts);
-        rightFlywheelSim.setInputVoltage(volts);
+    public void setFlywheelVelocityRPM(double rpm, double feedforwardVolts) {
+        // Emulate the SparkMax calculating voltage internally
+        leftAppliedVolts = feedforwardVolts + simLeftFlywheelPid.calculate(leftFlywheelSim.getAngularVelocityRPM(), rpm);
+        rightAppliedVolts = feedforwardVolts + simRightFlywheelPid.calculate(rightFlywheelSim.getAngularVelocityRPM(), rpm);
+        
+        leftFlywheelSim.setInputVoltage(leftAppliedVolts);
+        rightFlywheelSim.setInputVoltage(rightAppliedVolts);
     }
     
     @Override
-    public void setHoodVoltage(double volts) {
-        hoodAppliedVolts = volts;
-        hoodSim.setInputVoltage(volts);
+    public void setHoodPositionDegrees(double degrees) {
+        // Emulate the SparkMax position control
+        hoodAppliedVolts = simHoodPid.calculate(Units.radiansToDegrees(hoodSim.getAngleRads()), degrees);
+        hoodSim.setInputVoltage(hoodAppliedVolts);
     }
 
     @Override
     public void stop() {
-        setFlywheelVoltage(0);
-        setHoodVoltage(0);
+        leftAppliedVolts = 0.0;
+        rightAppliedVolts = 0.0;
+        hoodAppliedVolts = 0.0;
+        leftFlywheelSim.setInputVoltage(0);
+        rightFlywheelSim.setInputVoltage(0);
+        hoodSim.setInputVoltage(0);
     }
 }
